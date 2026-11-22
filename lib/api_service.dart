@@ -6,7 +6,7 @@ class ApiService {
 
   static double _demoBalance = 1850000.0;
 
-  static final List _demoInvoices = [
+  static final List<Map<String, dynamic>> _demoInvoices = [
     {
       "id": 101,
       "sender_email": "merchant@mdpay.mn",
@@ -42,7 +42,7 @@ class ApiService {
     },
   ];
 
-  static final List _demoTransactions = [
+  static final List<Map<String, dynamic>> _demoTransactions = [
     {
       "id": 501,
       "title": "Банкны данснаас цэнэглэлт",
@@ -73,16 +73,35 @@ class ApiService {
   ];
 
   // Бүх хүсэлтийг 1 URL руу action болон params-аар илгээх үндсэн функц
-  Future sendRequest(String action, Map params) async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    return _handleAction(action, params);
+  Future<Map<String, dynamic>> sendRequest(
+    String action,
+    Map<String, dynamic> params,
+  ) async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+      return _handleAction(action, params);
+    } catch (_) {
+      return {
+        "status": "error",
+        "message": "Сүлжээний холболтод алдаа гарлаа. Дахин оролдоно уу.",
+      };
+    }
   }
 
-  Map _handleAction(String action, Map params) {
+  String _currentTimestamp() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return "${now.year}-${two(now.month)}-${two(now.day)} ${two(now.hour)}:${two(now.minute)}";
+  }
+
+  Map<String, dynamic> _handleAction(
+    String action,
+    Map<String, dynamic> params,
+  ) {
     switch (action) {
       case "login":
-        String email = (params["email"] ?? "").toString().trim();
-        String password = (params["password"] ?? "").toString().trim();
+        final String email = (params["email"] ?? "").toString().trim();
+        final String password = (params["password"] ?? "").toString().trim();
 
         if (email.isEmpty || password.isEmpty) {
           return {
@@ -103,7 +122,7 @@ class ApiService {
         };
 
       case "get_dashboard":
-        int pendingCount = _demoInvoices
+        final int pendingCount = _demoInvoices
             .where((inv) => inv["status"] == "PENDING")
             .length;
         return {
@@ -111,15 +130,21 @@ class ApiService {
           "balance": _demoBalance,
           "pending_invoices_count": pendingCount,
           "recent_transactions_count": _demoTransactions.length,
-          "invoices": List.from(_demoInvoices),
-          "transactions": List.from(_demoTransactions),
+          "invoices": _demoInvoices
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(),
+          "transactions": _demoTransactions
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(),
         };
 
       case "generate_qr":
-        String qrType = (params["qr_type"] ?? "DYNAMIC").toString();
-        double amount = double.tryParse(params["amount"].toString()) ?? 0;
-        String desc = (params["description"] ?? "MDPay QR Төлбөр").toString();
-        int nextId = 100 + _demoInvoices.length + 1;
+        final String qrType = (params["qr_type"] ?? "DYNAMIC").toString();
+        final double amount =
+            double.tryParse(params["amount"].toString()) ?? 0;
+        final String desc =
+            (params["description"] ?? "MDPay QR Төлбөр").toString();
+        final int nextId = 100 + _demoInvoices.length + 1;
 
         if (qrType == "DYNAMIC" && amount <= 0) {
           return {
@@ -128,7 +153,7 @@ class ApiService {
           };
         }
 
-        String qrCode = qrType == "DYNAMIC"
+        final String qrCode = qrType == "DYNAMIC"
             ? "MDPAY_DYN_${nextId}_${amount.toInt()}"
             : "MDPAY_QUICK_${nextId}_OPEN";
 
@@ -141,9 +166,11 @@ class ApiService {
         };
 
       case "create_invoice":
-        String receiver = (params["receiver_email"] ?? "").toString().trim();
-        double amount = double.tryParse(params["amount"].toString()) ?? 0;
-        String desc = (params["description"] ?? "").toString().trim();
+        final String receiver =
+            (params["receiver_email"] ?? "").toString().trim();
+        final double amount =
+            double.tryParse(params["amount"].toString()) ?? 0;
+        final String desc = (params["description"] ?? "").toString().trim();
 
         if (receiver.isEmpty || amount <= 0 || desc.isEmpty) {
           return {
@@ -152,8 +179,8 @@ class ApiService {
           };
         }
 
-        int newId = 100 + _demoInvoices.length + 1;
-        Map newInv = {
+        final int newId = 100 + _demoInvoices.length + 1;
+        final Map<String, dynamic> newInv = {
           "id": newId,
           "sender_email": params["sender_email"] ?? "customer@mdpay.mn",
           "receiver_email": receiver,
@@ -162,7 +189,7 @@ class ApiService {
           "qr_type": "DYNAMIC",
           "qr_code": "MDPAY_DYN_${newId}_${amount.toInt()}",
           "status": "PENDING",
-          "date": "2026-11-16 15:10",
+          "date": _currentTimestamp(),
         };
         _demoInvoices.insert(0, newInv);
 
@@ -173,11 +200,12 @@ class ApiService {
         };
 
       case "pay_qr_or_invoice":
-        double amount = double.tryParse(params["amount"].toString()) ?? 0;
-        String desc = (params["description"] ?? "QR Төлбөр").toString();
-        String counterparty = (params["counterparty"] ?? "MDPay Мерчант")
-            .toString();
-        var invoiceId = params["invoice_id"];
+        final double amount =
+            double.tryParse(params["amount"].toString()) ?? 0;
+        final String desc = (params["description"] ?? "QR Төлбөр").toString();
+        final String counterparty =
+            (params["counterparty"] ?? "MDPay Мерчант").toString();
+        final dynamic invoiceId = params["invoice_id"];
 
         if (amount <= 0) {
           return {
@@ -197,48 +225,53 @@ class ApiService {
         _demoBalance -= amount;
 
         if (invoiceId != null) {
-          for (var inv in _demoInvoices) {
+          for (final inv in _demoInvoices) {
             if (inv["id"] == invoiceId) {
               inv["status"] = "PAID";
             }
           }
         }
 
-        _demoTransactions.insert(0, {
+        final Map<String, dynamic> createdTx = {
           "id": 500 + _demoTransactions.length + 1,
-          "title": desc,
+          "title": desc.isEmpty ? "MDPay Төлбөр" : desc,
           "counterparty": counterparty,
           "amount": amount.toInt(),
           "type": "EXPENSE",
           "method": params["method"] ?? "QR_PAYMENT",
-          "date": "2026-11-16 15:25",
-        });
+          "date": _currentTimestamp(),
+        };
+        _demoTransactions.insert(0, createdTx);
 
         return {
           "status": "success",
           "message": "Гүйлгээ амжилттай хийгдлээ!",
           "new_balance": _demoBalance,
+          "transaction": createdTx,
         };
 
       case "top_up":
-        double amount = double.tryParse(params["amount"].toString()) ?? 0;
+        final double amount =
+            double.tryParse(params["amount"].toString()) ?? 0;
         if (amount <= 0) {
           return {"status": "error", "message": "Цэнэглэх дүнгээ оруулна уу!"};
         }
         _demoBalance += amount;
-        _demoTransactions.insert(0, {
+        final Map<String, dynamic> createdTx = {
           "id": 500 + _demoTransactions.length + 1,
           "title": "Банкны API-аар данс цэнэглэлт",
           "counterparty": "Банкны апп холболт",
           "amount": amount.toInt(),
           "type": "INCOME",
           "method": "BANK_API",
-          "date": "2026-11-16 15:30",
-        });
+          "date": _currentTimestamp(),
+        };
+        _demoTransactions.insert(0, createdTx);
         return {
           "status": "success",
           "message": "Данс ${amount.toInt()}₮-өөр амжилттай цэнэглэгдлээ!",
           "new_balance": _demoBalance,
+          "transaction": createdTx,
         };
 
       default:
